@@ -64,8 +64,9 @@ def wrap_fun(fun: T, injector: Injector) -> T:
         if wrap_it:
             return wrap_fun(inject(fun), injector)
 
-    if hasattr(fun, 'view_class'):
-        return wrap_class_based_view(fun, injector)
+    # Deactivated as it doesn't work with our CBVs
+    # if hasattr(fun, 'view_class'):
+    #     return wrap_class_based_view(fun, injector)
 
     return fun
 
