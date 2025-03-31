@@ -10,7 +10,17 @@
 # Author: Alec Thomas <alec@swapoff.org>
 import functools
 from inspect import ismethod
-from typing import Any, Callable, cast, Dict, get_type_hints, Iterable, List, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Dict,
+    get_type_hints,
+    Iterable,
+    List,
+    TypeVar,
+    Union,
+)
 
 import flask
 
@@ -32,11 +42,11 @@ from werkzeug.wrappers import Response
 from injector import Module, Provider, Scope, ScopeDecorator, singleton
 
 
-__author__ = 'Alec Thomas <alec@swapoff.org>'
-__version__ = '0.15.0'
-__all__ = ['request', 'RequestScope', 'Config', 'Request', 'FlaskInjector']
+__author__ = "Alec Thomas <alec@swapoff.org>"
+__version__ = "0.15.0"
+__all__ = ["request", "RequestScope", "Config", "Request", "FlaskInjector"]
 
-T = TypeVar('T', LocalProxy, Callable)
+T = TypeVar("T", LocalProxy, Callable)
 
 
 def instance_method_wrapper(im: T) -> T:
@@ -56,13 +66,14 @@ def wrap_fun(fun: T, injector: Injector) -> T:
 
     # Important: this block needs to stay here so it's executed *before* the
     # hasattr(fun, '__call__') block below - otherwise things may crash.
-    if hasattr(fun, '__bindings__'):
+    if hasattr(fun, "__bindings__"):
         return wrap_function(fun, injector)
 
-    if hasattr(fun, 'view_class'):
-        return wrap_class_based_view(fun, injector)
+    # Deactivated as it doesn't work with our CBVs
+    # # if hasattr(fun, 'view_class'):
+    #     return wrap_class_based_view(fun, injector)
 
-    if hasattr(fun, '__call__') and not isinstance(fun, type):
+    if hasattr(fun, "__call__") and not isinstance(fun, type):
         try:
             type_hints = get_type_hints(fun)
         except (AttributeError, TypeError):
@@ -75,7 +86,7 @@ def wrap_fun(fun: T, injector: Injector) -> T:
         except NameError:
             wrap_it = True
         else:
-            type_hints.pop('return', None)
+            type_hints.pop("return", None)
             wrap_it = type_hints != {}
         if wrap_it:
             return wrap_fun(inject(fun), injector)
@@ -98,22 +109,26 @@ def wrap_class_based_view(fun: Callable, injector: Injector) -> Callable:
     closure_contents = (c.cell_contents for c in cast(Any, fun).__closure__)
     fun_closure = dict(zip(fun.__code__.co_freevars, closure_contents))
     try:
-        class_kwargs = fun_closure['class_kwargs']
+        class_kwargs = fun_closure["class_kwargs"]
     except KeyError:
         # Most likely flask_restful resource, we'll see in a second
-        flask_restful_api = fun_closure['self']
+        flask_restful_api = fun_closure["self"]
         # flask_restful wraps ResourceClass.as_view() result in its own wrapper
         # the as_view() result is available under 'resource' name in this closure
-        fun = fun_closure['resource']
+        fun = fun_closure["resource"]
         fun_closure = {}
         class_kwargs = {}
         # if the lines above succeeded we're quite sure it's flask_restful resource
     else:
         flask_restful_api = None
-        class_args = fun_closure.get('class_args')
-        assert not class_args, 'Class args are not supported, use kwargs instead'
+        class_args = fun_closure.get("class_args")
+        assert not class_args, "Class args are not supported, use kwargs instead"
 
-    if flask_restful_api and flask_restx and isinstance(flask_restful_api, flask_restx.Api):
+    if (
+        flask_restful_api
+        and flask_restx
+        and isinstance(flask_restful_api, flask_restx.Api)
+    ):
         # This is flask_restplus' (before it forked into flask_restx) add_resource
         # implementation:
         #
@@ -133,10 +148,10 @@ def wrap_class_based_view(fun: Callable, injector: Injector) -> Callable:
         # instance as keyword argument instead (it'll work just as well unless
         # flask_restx changes the name of the parameter; also
         # Injector.create_object doesn't support extra positional arguments anyway).
-        if 'api' in class_kwargs:
-            raise AssertionError('api keyword argument is reserved')
+        if "api" in class_kwargs:
+            raise AssertionError("api keyword argument is reserved")
 
-        class_kwargs['api'] = flask_restful_api
+        class_kwargs["api"] = flask_restful_api
 
     # This section is flask.views.View.as_view code modified to make the injection
     # possible without relying on modifying view function in place
@@ -339,7 +354,9 @@ class FlaskInjector:
             # scope unconditionally.
             injector_not_null.get(request_scope_class).cleanup()
 
-        app.before_request_funcs.setdefault(None, []).insert(0, reset_request_scope_before)
+        app.before_request_funcs.setdefault(None, []).insert(
+            0, reset_request_scope_before
+        )
         # We're accessing Flask internals here as the app.teardown_request decorator appends to a list of
         # handlers but Flask itself reverses the list when it executes them. To allow injecting request-scoped
         # dependencies into teardown_request handlers we need to run our teardown_request handler after them.
@@ -352,7 +369,9 @@ class FlaskInjector:
         #
         # We need the None key to be present in the dictionary so that the dictionary iteration always yields
         # None as well. We *always* have to set the global teardown request.
-        app.teardown_request_funcs.setdefault(None, []).insert(0, global_reset_request_scope_after)
+        app.teardown_request_funcs.setdefault(None, []).insert(
+            0, global_reset_request_scope_after
+        )
         for bp, functions in app.teardown_request_funcs.items():
             if bp is not None:
                 functions.insert(0, blueprint_reset_request_scope_after)
@@ -369,7 +388,7 @@ def process_dict(d: Dict, injector: Injector) -> None:
             pass
         elif isinstance(value, list):
             process_list(value, injector)
-        elif hasattr(value, '__call__'):
+        elif hasattr(value, "__call__"):
             d[key] = wrap_fun(value, injector)
         elif isinstance(value, dict):
             process_dict(value, injector)
@@ -381,7 +400,9 @@ def process_list(l: List, injector: Injector) -> None:
 
 
 class FlaskModule(Module):
-    def __init__(self, app: flask.Flask, request_scope_class: type = RequestScope) -> None:
+    def __init__(
+        self, app: flask.Flask, request_scope_class: type = RequestScope
+    ) -> None:
         self.app = app
         self.request_scope_class = request_scope_class
 
